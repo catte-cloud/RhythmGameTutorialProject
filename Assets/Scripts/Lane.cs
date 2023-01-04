@@ -1,4 +1,4 @@
-﻿using Melanchall.DryWetMidi.Interaction;
+using Melanchall.DryWetMidi.Interaction;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -11,6 +11,8 @@ public class Lane : MonoBehaviour
     public GameObject notePrefab;
     List<Note> notes = new List<Note>();
     public List<double> timeStamps = new List<double>();
+    public List<double> lengths = new List<double>();
+    public List<bool> isHoldNotes = new List<bool>();
 
     int spawnIndex = 0;
     int inputIndex = 0;
@@ -28,6 +30,8 @@ public class Lane : MonoBehaviour
             {
                 var metricTimeSpan = TimeConverter.ConvertTo<MetricTimeSpan>(note.Time, SongManager.midiFile.GetTempoMap());
                 timeStamps.Add((double)metricTimeSpan.Minutes * 60f + metricTimeSpan.Seconds + (double)metricTimeSpan.Milliseconds / 1000f);
+                lengths.Add(note.Length.TotalSeconds);
+                isHoldNotes.Add(note.IsHoldNote);
             }
         }
     }
@@ -41,6 +45,8 @@ public class Lane : MonoBehaviour
                 var note = Instantiate(notePrefab, transform);
                 notes.Add(note.GetComponent<Note>());
                 note.GetComponent<Note>().assignedTime = (float)timeStamps[spawnIndex];
+                note.GetComponent<Note>().length = (float)lengths[spawnIndex];
+                note.GetComponent<Note>().isHoldNote = isHoldNotes[spawnIndex];
                 spawnIndex++;
             }
         }
@@ -48,31 +54,40 @@ public class Lane : MonoBehaviour
         if (inputIndex < timeStamps.Count)
         {
             double timeStamp = timeStamps[inputIndex];
+            double length = lengths[inputIndex];
             double marginOfError = SongManager.Instance.marginOfError;
             double audioTime = SongManager.GetAudioSourceTime() - (SongManager.Instance.inputDelayInMilliseconds / 1000.0);
 
-            if (Input.GetKeyDown(input))
+            if (isHoldNotes[inputIndex])
             {
-                if (Math.Abs(audioTime - timeStamp) < marginOfError)
+                if (Input.GetKeyDown(input))
                 {
-                    Hit();
-                    print($"Hit on {inputIndex} note");
-                    Destroy(notes[inputIndex].gameObject);
-                    inputIndex++;
-                }
-                else
+                    if (Math.Abs(audioTime - timeStamp) < marginOfError)
+                    {
+                        Hit();
+                        inputIndex++;
+                    }
+                    else
+                    {
+                        print($"Hit inaccurate on {inputIndex}")
+                        Miss();
+                    }
+               }
+           else
+                if (Input.GetKeyDown(input))
                 {
-                    print($"Hit inaccurate on {inputIndex} note with {Math.Abs(audioTime - timeStamp)} delay");
-                }
-            }
-            if (timeStamp + marginOfError <= audioTime)
-            {
-                Miss();
-                print($"Missed {inputIndex} note");
-                inputIndex++;
-            }
-        }       
-    
+                    if (Math.Abs(audioTime - timeStamp) < marginOfError)
+                    {
+                        Hit();
+                        inputIndex++;
+                    }
+                    else
+                    {
+                        print($"Hit inaccurate on {inputIndex}")
+                        Miss();
+                    }
+               }
+
     }
     private void Hit()
     {
@@ -83,3 +98,4 @@ public class Lane : MonoBehaviour
         ScoreManager.Miss();
     }
 }
+
